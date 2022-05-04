@@ -1,4 +1,4 @@
 # http_lookup
 Tool to validate an HTTP security headers configuration inspired by OWASP Secure Headers Project
 # Example
-![PoC](https://github.com/abletsoff/web_test/blob/main/PoC.png?raw=true)
+![Example](https://github.com/abletsoff/web_test/blob/main/Example.png?raw=true)
