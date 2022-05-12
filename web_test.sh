@@ -37,16 +37,19 @@ function f_http_parse () {
 	e_security_headers=()	# existing security headers
 	m_security_headers=()	# missed security headers
 
-	http_response=$(curl -A "${user_agent}" --connect-timeout 5 -vk $1 2>&1)
-
+	http_response=$(curl -A "${user_agent}" --connect-timeout 5 -v $1 2>&1)
+	
 	if [[ $(grep "^curl: (28)" <<< $http_response) != "" ]]; then
 		echo -e "\t${Red}Connection timeout${Color_Off}"
 		return 0
 	elif [[ $(grep "^curl: (7)" <<< $http_response) != "" ]]; then
-		echo -e "\t${red}Failed to connect${color_off}"
+		echo -e "\t${Red}Failed to connect${Color_Off}"
 		return 0
 	elif [[ $(grep "^curl: (56)" <<< $http_response) != "" ]]; then
-		echo -e "\t${red}Connection reset${color_off}"
+		echo -e "\t${Red}Connection reset${Color_Off}"
+		return 0
+	elif [[ $(grep "^curl: (60)" <<< $http_response) != "" ]]; then
+		echo -e "\t${Red}SSL certificate problem${Color_Off}"
 		return 0
 	fi
 		
