@@ -21,11 +21,17 @@ function f_dns_resolve () {
    	ip_address=$(grep -P $ip_address_regex <<< $domain)
 	
 	if [[ $ip_address == "" ]]; then
-   		resolve=$(dig +short $domain | head -n 1)	
+        
+        IFS=':'; read -ra url_array <<< $domain; IFS=' ' # split port number
+        domain_part=${url_array[0]}
+
+   		resolve=$(dig +short $domain_part | head -n 1)	
     	if [[ $resolve == "" ]]; then
-    	    resolve="unresolved"
+    	    resolve="Unresolved"
+		    echo -e "$domain - ${Red}$resolve${Color_Off}"
+        else
+		    echo -e "$domain - $resolve"
 		fi
-		echo -e "$domain - $resolve"
 	else
 		echo -e "$domain"
 	fi
@@ -49,7 +55,16 @@ function f_http_parse () {
 		echo -e "\t${Red}Connection reset${Color_Off}"
 		return 0
 	elif [[ $(grep "^curl: (60)" <<< $http_response) != "" ]]; then
-		echo -e "\t${Red}SSL certificate problem${Color_Off}"
+        echo -en "\t${Red}(SSL certificate problem)${Color_Off}"
+	    http_response=$(curl -A "${user_agent}" --connect-timeout 5 -v -k $1 2>&1)
+	elif [[ $(grep "^curl: (3)" <<< $http_response) != "" ]]; then
+		echo -e "\t${Red}URL bad/illegal format${Color_Off}"
+		return 0
+	elif [[ $(grep "^curl: (52)" <<< $http_response) != "" ]]; then
+		echo -e "\t${Red}Empty reply from server${Color_Off}"
+		return 0
+	elif [[ $(grep "^curl: (35)" <<< $http_response) != "" ]]; then
+		echo -e "\t${Red}SSL connect error${Color_Off}"
 		return 0
 	fi
 		
@@ -97,7 +112,7 @@ function f_resources_check () {
 	domain=$1
 
     f_dns_resolve $domain
-	if [[ $resolve != 'unresolved' ]]; then
+	if [[ $resolve != 'Unresolved' ]]; then
    		echo -e -n '\tHTTP: '
 		f_http_parse $domain
 		echo -e -n '\tHTTPS: '
