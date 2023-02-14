@@ -3,6 +3,7 @@
 user_agent="Mozilla/5.0 (X11; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0"
 
 # last update: "2023-01-12 21:19:59"
+
 disclosure_headers=("Host-Header" \
     "Liferay-Portal" \
     "Pega-Host" \
@@ -36,6 +37,10 @@ disclosure_headers=("Host-Header" \
     "X-Varnish-Backend" \
     "X-Varnish-Server")
 
+disclosure_cookies=("PHPSESSID" \
+	"ASP.NET_SessionID" \
+	"ASP.NET_SessionID_Fallback")
+
 security_headers=("Strict-Transport-Security" \
    	"Content-Security-Policy" \
    	"X-Frame-Options" \
@@ -45,41 +50,28 @@ security_headers=("Strict-Transport-Security" \
 
 ip_address_regex='([1-2]?\d{1,2}\.){3}[1-2]?\d{1,2}'
 
-function f_http_parse () {
+function f_cookies_analyzing () {
+	http_response=$1
+	e_disclosure_cookies=() # existing disclosure cookies 
 	
+	for cookie in "${disclosure_cookies[@]}"; do
+		match=$(grep -i "^< Set-Cookie: ${cookie}" <<< $http_response)
+		if [[ $match != "" ]]; then
+			e_disclosure_cookies+=("$(cut -d " " -f 2-3 <<< $match)")
+		fi
+	done
+	
+	for cookie in "${e_disclosure_cookies[@]}"; do
+		echo -e "${Red}Disclosure - ${cookie}${Color_Off}"
+	done
+}
+
+function f_headers_analyzing () {
+	http_response=$1
 	e_disclosure_headers=() # existing disclosure headers
 	e_security_headers=()	# existing security headers
 	m_security_headers=()	# missed security headers
 
-	http_response=$(curl -A "${user_agent}" --connect-timeout 5 -v $1 2>&1)
-	
-	if [[ $(grep "^curl: (28)" <<< $http_response) != "" ]]; then
-		echo -e "Connection timeout"
-		return 0
-	elif [[ $(grep "^curl: (7)" <<< $http_response) != "" ]]; then
-		echo -e "Failed to connect"
-		return 0
-	elif [[ $(grep "^curl: (56)" <<< $http_response) != "" ]]; then
-		echo -e "Connection reset"
-		return 0
-	elif [[ $(grep "^curl: (60)" <<< $http_response) != "" ]]; then
-        echo "Warning: (SSL certificate problem)"
-	    http_response=$(curl -A "${user_agent}" --connect-timeout 5 -v -k $1 2>&1)
-	elif [[ $(grep "^curl: (3)" <<< $http_response) != "" ]]; then
-		echo -e "URL bad/illegal format"
-		return 0
-	elif [[ $(grep "^curl: (52)" <<< $http_response) != "" ]]; then
-		echo -e "Empty reply from server"
-		return 0
-	elif [[ $(grep "^curl: (35)" <<< $http_response) != "" ]]; then
-		echo -e "SSL connect error"
-		return 0
-	fi
-		
-	response_code=$(grep -E "^< HTTP/" <<< $http_response)
-	response_code=$(cut -d " " -f 2- <<< $response_code)
-	echo -e "Response - ${response_code}"
-		
 	for header in "${disclosure_headers[@]}"; do
 		match=$(grep -i "^< ${header}:" <<< $http_response)
 		if [[ $match != "" ]]; then
@@ -106,7 +98,7 @@ function f_http_parse () {
 		done
 		
 		for header in "${e_security_headers[@]}"; do
-			echo -e -n "${Green}Settup - $(cut -d " " -f 1-4 <<< $header)${Color_Off}"
+			echo -e -n "${Green}Existing - $(cut -d " " -f 1-4 <<< $header)${Color_Off}"
 			if (( $(tr -cd ' ' <<< $header | wc -c) < 4 )); then
 				echo ""
 			else
@@ -114,6 +106,44 @@ function f_http_parse () {
 			fi
 		done
 	fi
+}
+
+function f_http_parse () {
+	
+	http_response=$(curl -A "${user_agent}" --connect-timeout 5 -v $1 2>&1)
+	
+	if [[ $(grep "^curl: (28)" <<< $http_response) != "" ]]; then
+		echo -e "Warning: Connection timeout"
+		return 0
+	elif [[ $(grep "^curl: (7)" <<< $http_response) != "" ]]; then
+		echo -e "Warning: Failed to connect"
+		return 0
+	elif [[ $(grep "^curl: (56)" <<< $http_response) != "" ]]; then
+		echo -e "Warning: Connection reset"
+		return 0
+	elif [[ $(grep "^curl: (60)" <<< $http_response) != "" ]]; then
+        echo "Warning: (SSL certificate problem)"
+	    http_response=$(curl -A "${user_agent}" --connect-timeout 5 -v -k $1 2>&1)
+	elif [[ $(grep "^curl: (3)" <<< $http_response) != "" ]]; then
+		echo -e "Error: URL bad/illegal format"
+		return 0
+	elif [[ $(grep "^curl: (52)" <<< $http_response) != "" ]]; then
+		echo -e "Warning: Empty reply from server"
+		return 0
+	elif [[ $(grep "^curl: (35)" <<< $http_response) != "" ]]; then
+		echo -e "Error: SSL connect error"
+		return 0
+	elif [[ $(grep "^curl: (6)" <<< $http_response) != "" ]]; then
+		echo -e "Error: Could not resolve host"
+		return 0
+	fi
+		
+	response_code=$(grep -E "^< HTTP/" <<< $http_response)
+	response_code=$(cut -d " " -f 2- <<< $response_code)
+	echo -e "Response - ${response_code}"
+	
+	f_cookies_analyzing "$http_response"
+	f_headers_analyzing "$http_response"
 }
 
 f_print_help () {
@@ -138,7 +168,7 @@ shift $((OPTIND-1))
 url=$1
 
 if [[ $url != "" ]]; then
-	f_http_parse $url
+	f_http_parse "$url"
 else
 	f_print_help
 fi
