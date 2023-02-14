@@ -41,6 +41,8 @@ disclosure_cookies=("PHPSESSID" \
 	"ASP.NET_SessionID" \
 	"ASP.NET_SessionID_Fallback")
 
+disclosure_items=('<meta name=\"generator\" content=\"Joomla! - Open Source Content Management\" />')
+
 security_headers=("Strict-Transport-Security" \
    	"Content-Security-Policy" \
    	"X-Frame-Options" \
@@ -108,6 +110,28 @@ function f_headers_analyzing () {
 	fi
 }
 
+function f_body_analyzing () {
+	http_response=$1
+	e_disclosure_items=() # existing disclosure items
+	
+	for item in "${disclosure_items[@]}"; do
+		match=$(grep -o "${item}" <<< $http_response)
+		if [[ $match != "" ]]; then
+			e_disclosure_items+=("$match")
+		fi
+	done
+	
+	if [ ! ${#e_disclosure_items[@]} -eq 0 ]; then
+		echo "HTTP body disclosure:"
+	fi
+	
+	count=1	
+	for item in "${e_disclosure_items[@]}"; do
+		echo -e "${Red}${count}) ${item}${Color_Off}"
+		count=$((count+1))
+	done
+}
+
 function f_http_parse () {
 	
 	http_response=$(curl -A "${user_agent}" --connect-timeout 5 -v $1 2>&1)
@@ -144,6 +168,7 @@ function f_http_parse () {
 	
 	f_cookies_analyzing "$http_response"
 	f_headers_analyzing "$http_response"
+	f_body_analyzing "$http_response"
 }
 
 f_print_help () {
