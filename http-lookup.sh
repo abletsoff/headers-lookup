@@ -169,14 +169,24 @@ function f_http_parse () {
 	f_cookies_analyzing "$http_response"
 	f_headers_analyzing "$http_response"
 	f_body_analyzing "$http_response"
+	
+	if [[ $(grep -P '30[12378]' <<< $response_code) != "" ]]; then
+		location=$(grep --ignore-case "< location" <<< $http_response)
+		echo $location | cut -d " " -f 2-
+		if [[ $follow_redirect == "True" ]]; then
+			url=$(grep --only-matching -P "https?://\S*" <<< $location)
+			f_http_parse "$url"
+		fi
+	fi
 }
 
 f_print_help () {
 	echo -e "Usage: headers-lookup [options...] <url>\n" \
 			 "-h\tdisplay this help and exit\n" \
-			 "-c\tcolorized output"
+			 "-c\tcolorized output\n" \
+			 "-f\tfollow redirect"
 }
-while getopts "hc" opt; do
+while getopts "hcf" opt; do
 	case $opt in
 		h) 	f_print_help
 			exit ;;
@@ -185,6 +195,7 @@ while getopts "hc" opt; do
 			Yellow='\033[0;93m'
 			Green='\033[0;92m'
 			Color_Off='\033[0m';;
+		f)	follow_redirect="True";;
 		?) 	exit;;
 	esac
 done
