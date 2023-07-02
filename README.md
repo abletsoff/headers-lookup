@@ -1,4 +1,4 @@
-# http-lookup
+# http-enum
 Tool for HTTP security analysis. Inspired by OWASP Secure Headers Project
 
 # Example
