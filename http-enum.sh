@@ -3,9 +3,9 @@
 user_agent="Mozilla/5.0 (X11; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0"
 err_file="/tmp/http-enum-stderr"
 
-# last update: "2023-01-12 21:19:59"
-
-disclosure_headers=("Host-Header" \
+disclosure_headers=("\$wsep" \
+    "Host-Header" \
+    "K-Proxy-Request" \
     "Liferay-Portal" \
     "Pega-Host" \
     "Powered-By" \
@@ -17,14 +17,27 @@ disclosure_headers=("Host-Header" \
     "X-Atmosphere-error" \
     "X-Atmosphere-first-request" \
     "X-Atmosphere-tracking-id" \
+    "X-B3-ParentSpanId" \
+    "X-B3-Sampled" \
+    "X-B3-SpanId" \
+    "X-B3-TraceId" \
     "X-CF-Powered-By" \
     "X-CMS" \
     "X-Content-Encoded-By" \
+    "X-Envoy-Attempt-Count" \
+    "X-Envoy-External-Address" \
+    "X-Envoy-Internal" \
+    "X-Envoy-Original-Dst-Host" \
     "X-Envoy-Upstream-Service-Time" \
     "X-Framework" \
     "X-Generated-By" \
     "X-Generator" \
     "X-Mod-Pagespeed" \
+    "X-Nextjs-Cache" \
+    "X-Nextjs-Matched-Path" \
+    "X-Nextjs-Page" \
+    "X-Nextjs-Redirect" \
+    "X-Old-Content-Length" \
     "X-Page-Speed" \
     "X-Php-Version" \
     "X-Powered-By" \
@@ -40,7 +53,10 @@ disclosure_headers=("Host-Header" \
 
 disclosure_cookies=("PHPSESSID" \
 	"ASP.NET_SessionID" \
-	"ASP.NET_SessionID_Fallback")
+	"ASP.NET_SessionID_Fallback" \
+    "BITRIX_SM_GUEST_ID" \
+    "BITRIX_SM_LAST_VISIT" \
+    "BITRIX_SM_BANNERS")
 
 disclosure_items=('<meta name=\"generator\" content=\"Joomla! - Open Source Content Management\" />')
 
@@ -53,23 +69,28 @@ security_headers=("Strict-Transport-Security" \
 
 ip_address_regex='([1-2]?\d{1,2}\.){3}[1-2]?\d{1,2}'
 
-function f_cookies_analyzing () {
+f_cookies_analyzing () {
 	http_response=$1
-	e_disclosure_cookies=() # existing disclosure cookies 
-	
-	for cookie in "${disclosure_cookies[@]}"; do
-		match=$(grep -i "^Set-Cookie: ${cookie}" <<< $http_response)
-		if [[ $match != "" ]]; then
-			e_disclosure_cookies+=("$(cut -d " " -f 1-2 <<< $match)")
-		fi
-	done
+	e_disclosure_cookies=()
+
+    header_cookies=$(grep -i -P "^Set-Cookie: " <<< $http_response)
+
+    for header_cookie in "${header_cookies[@]}"; do
+        disclosure_found='false'
+        for disclosure_cookie in "${disclosure_cookies[@]}"; do
+            if [[ $(echo "$header_cookie" | grep -i "$disclosure_cookie") != '' ]]; then
+			    e_disclosure_cookies+=("$disclosure_cookie")
+                disclosure_found='true'
+            fi
+        done
+    done
 	
 	for cookie in "${e_disclosure_cookies[@]}"; do
-		echo -e "${Red}Disclosure - ${cookie}${Color_Off}"
+		echo -e "${Red}Disclosure - set-cookie: ${cookie}${Color_Off}"
 	done
 }
 
-function f_headers_analyzing () {
+f_headers_analyzing () {
 	http_response=$1
 	e_disclosure_headers=() # existing disclosure headers
 	e_security_headers=()	# existing security headers
@@ -111,7 +132,7 @@ function f_headers_analyzing () {
 	fi
 }
 
-function f_body_analyzing () {
+f_body_analyzing () {
 	http_response=$1
 	e_disclosure_items=() # existing disclosure items
 	
@@ -133,7 +154,7 @@ function f_body_analyzing () {
 	done
 }
 
-function f_http_parse () {
+f_http_parse () {
     first_output=$1
     url=$2
 
