@@ -3,60 +3,8 @@
 user_agent="Mozilla/5.0 (X11; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0"
 err_file="/tmp/http-enum-stderr"
 
-disclosure_headers=("\$wsep" \
-    "Host-Header" \
-    "K-Proxy-Request" \
-    "Liferay-Portal" \
-    "Pega-Host" \
-    "Powered-By" \
-    "Product" \
-    "Server" \
-    "SourceMap" \
-    "X-AspNet-Version" \
-    "X-AspNetMvc-Version" \
-    "X-Atmosphere-error" \
-    "X-Atmosphere-first-request" \
-    "X-Atmosphere-tracking-id" \
-    "X-B3-ParentSpanId" \
-    "X-B3-Sampled" \
-    "X-B3-SpanId" \
-    "X-B3-TraceId" \
-    "X-CF-Powered-By" \
-    "X-CMS" \
-    "X-Content-Encoded-By" \
-    "X-Envoy-Attempt-Count" \
-    "X-Envoy-External-Address" \
-    "X-Envoy-Internal" \
-    "X-Envoy-Original-Dst-Host" \
-    "X-Envoy-Upstream-Service-Time" \
-    "X-Framework" \
-    "X-Generated-By" \
-    "X-Generator" \
-    "X-Mod-Pagespeed" \
-    "X-Nextjs-Cache" \
-    "X-Nextjs-Matched-Path" \
-    "X-Nextjs-Page" \
-    "X-Nextjs-Redirect" \
-    "X-Old-Content-Length" \
-    "X-Page-Speed" \
-    "X-Php-Version" \
-    "X-Powered-By" \
-    "X-Powered-By-Plesk" \
-    "X-Powered-CMS" \
-    "X-Redirect-By" \
-    "X-Server-Powered-By" \
-    "X-SourceFiles" \
-    "X-SourceMap" \
-    "X-Turbo-Charged-By" \
-    "X-Varnish-Backend" \
-    "X-Varnish-Server")
-
-disclosure_cookies=("PHPSESSID" \
-	"ASP.NET_SessionID" \
-	"ASP.NET_SessionID_Fallback" \
-    "BITRIX_SM_GUEST_ID" \
-    "BITRIX_SM_LAST_VISIT" \
-    "BITRIX_SM_BANNERS")
+readarray -t disclosure_headers < "$WEB_ENUM_DIR/headers.csv"
+readarray -t disclosure_cookies < "$WEB_ENUM_DIR/cookies.csv"
 
 disclosure_items=('<meta name=\"generator\" content=\"Joomla! - Open Source Content Management\" />')
 
@@ -78,8 +26,9 @@ f_cookies_analyzing () {
     for header_cookie in "${header_cookies[@]}"; do
         disclosure_found='false'
         for disclosure_cookie in "${disclosure_cookies[@]}"; do
-            if [[ $(echo "$header_cookie" | grep -i "$disclosure_cookie") != '' ]]; then
-			    e_disclosure_cookies+=("$disclosure_cookie")
+            pattern=$(echo "$disclosure_cookie" | cut -d ',' -f1)
+            if [[ $(echo "$header_cookie" | grep -i "$pattern") != '' ]]; then
+			    e_disclosure_cookies+=("$pattern")
                 disclosure_found='true'
             fi
         done
@@ -97,7 +46,8 @@ f_headers_analyzing () {
 	m_security_headers=()	# missed security headers
 
 	for header in "${disclosure_headers[@]}"; do
-		match=$(grep -i "^${header}:" <<< $http_response)
+        pattern=$(echo "$header" | cut -d "," -f 1)
+		match=$(grep -i "^${pattern}:" <<< $http_response)
 		if [[ $match != "" ]]; then
 			e_disclosure_headers+=("$(cut -d " " -f 1- <<< $match)")
 		fi
@@ -163,12 +113,12 @@ f_http_parse () {
     fi
     echo "URL: $url"
 
-    http_response=$(curl -sS -A "${user_agent}" --connect-timeout 5 -i "$url" \
+    http_response=$(curl -sS -A "${user_agent}" --connect-timeout 1 -i "$url" \
         2>$err_file | tr '\0' '\n')
 
     if  [[ $(grep "curl: (60)" $err_file) != "" ]]; then
         echo "Warning: (SSL certificate problem)"
-        http_response=$(curl -sS -k -A "${user_agent}" --connect-timeout 5 -i "$url" \
+        http_response=$(curl -sS -k -A "${user_agent}" --connect-timeout 1 -i "$url" \
          2>$err_file | tr '\0' '\n')
     fi
 
@@ -194,7 +144,6 @@ f_http_parse () {
 	fi
 }
 
-
 f_ip_request () {
     scheme_host=$(echo "$url" | grep -o -P "(https?:\/\/)?[A-Z,a-z,1-9,\.]+" \
         | head -n 1)
@@ -216,7 +165,7 @@ f_print_help () {
 	echo -e "Usage: headers-lookup [options...] <url>\n" \
 			"-h\tdisplay this help and exit\n" \
 			"-c\tcolorized output\n" \
-			"-f\tfollow redirect\n"
+			"-f\tfollow redirect\n" \
             "-i\tIP address in hostname(e.g. Host: 8.8.8.8)"
 }
 while getopts "hcfi" opt; do

@@ -1,4 +1,3 @@
-Header,Platfrom
 $wsep,"WebSphere Apllication Server"
 Host-Header,""
 K-Proxy-Request,"Knative"
